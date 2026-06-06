@@ -84,8 +84,9 @@ select:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--
 .fms-flags .flag{font-size:14.5px;color:var(--warn);font-weight:500;display:flex;gap:8px;align-items:flex-start}
 
 /* UPLOAD */
-.uploads{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-@media(max-width:720px){.uploads{grid-template-columns:1fr}}
+.uploads{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+@media(max-width:860px){.uploads{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:480px){.uploads{grid-template-columns:1fr}}
 .slot{position:relative;border:2.5px dashed var(--border-strong);border-radius:14px;background:var(--bg2);
   aspect-ratio:3/4;display:flex;flex-direction:column;align-items:center;justify-content:center;
   cursor:pointer;overflow:hidden;transition:border-color .18s,background .18s}
@@ -265,7 +266,7 @@ footer{border-top:2px solid var(--ink);margin-top:70px;padding:36px 0 56px}
   <section class="block">
     <div class="sec-head"><span class="sec-num">03</span><h3>Caricamento immagini</h3></div>
     <div class="uploads" id="uploads"></div>
-    <p class="status" style="margin-top:14px">Suggerimento: abiti aderenti, sfondo neutro, fotocamera ad altezza ombelico e parallela al corpo. Frontale e laterale in posizione eretta; lo <strong>squat</strong> va ripreso frontalmente nel punto più basso del movimento (per valgismo, simmetria e profondità).</p>
+    <p class="status" style="margin-top:14px">Suggerimento: abiti aderenti, sfondo neutro, fotocamera ad altezza ombelico e parallela al corpo. Frontale e laterale in posizione eretta; lo <strong>squat</strong> ripreso nel punto più basso — frontalmente (valgismo, simmetria, profondità) e di lato (inclinazione del tronco, flessione del ginocchio, profondità).</p>
   </section>
 
   <!-- 4. ANALISI -->
@@ -332,11 +333,12 @@ import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@m
 
 /* ---------- Config viste ---------- */
 const VIEWS = [
-  { key:'frontale', label:'Frontale', plane:'frontale' },
-  { key:'laterale', label:'Laterale', plane:'sagittale' },
-  { key:'squat',    label:'Squat',    plane:'squat' },
+  { key:'frontale',  label:'Frontale',        plane:'frontale' },
+  { key:'laterale',  label:'Laterale',        plane:'sagittale' },
+  { key:'squat',     label:'Squat frontale',  plane:'squat' },
+  { key:'squat_lat', label:'Squat laterale',  plane:'squat_lat' },
 ];
-const PLANE_LABEL={frontale:'piano frontale',sagittale:'piano sagittale',squat:'squat · vista frontale'};
+const PLANE_LABEL={frontale:'piano frontale',sagittale:'piano sagittale',squat:'squat · vista frontale',squat_lat:'squat · vista laterale'};
 const state = { images:{}, results:{} };
 let landmarker = null;
 
@@ -476,6 +478,28 @@ function computeSquat(lm,w,h){
   m.push(metric('Profondità', (depth>0?'+':'')+depth.toFixed(0)+'%', depthSev, depth>=0?'anca ≤ ginocchio':'sopra il parallelo'));
   return {metrics:m, lm, w, h, plumbX:ankMid.x, conf:minVis([hipL,hipR,kneeL,kneeR,ankL,ankR])};
 }
+function angleVert(a,b){ const dx=b.x-a.x, dy=b.y-a.y; return Math.atan2(Math.abs(dx),Math.abs(dy))*180/Math.PI; }
+function computeSquatLat(lm,w,h){
+  // sceglie il lato più visibile (vista laterale)
+  const Lset={sh:P(lm,L.shL,w,h),hip:P(lm,L.hipL,w,h),knee:P(lm,L.kneeL,w,h),ank:P(lm,L.ankL,w,h)};
+  const Rset={sh:P(lm,L.shR,w,h),hip:P(lm,L.hipR,w,h),knee:P(lm,L.kneeR,w,h),ank:P(lm,L.ankR,w,h)};
+  const visL=(Lset.sh.v+Lset.hip.v+Lset.knee.v+Lset.ank.v), visR=(Rset.sh.v+Rset.hip.v+Rset.knee.v+Rset.ank.v);
+  const S = visL>=visR?Lset:Rset;
+  const trunkLean=angleVert(S.sh,S.hip);      // inclinazione tronco vs verticale
+  const shinAngle=angleVert(S.knee,S.ank);    // inclinazione tibia vs verticale
+  const kneeFlex=angleAt(S.hip,S.knee,S.ank); // angolo articolare ginocchio (sagittale)
+  const parallelism=Math.abs(trunkLean-shinAngle);
+  const Href=Math.abs(S.ank.y-S.sh.y)||h;
+  const depth=(S.hip.y-S.knee.y)/Href*100;
+  const depthSev = depth>=-2 ? 'ok' : (depth>=-10?'warn':'bad');
+  const kneeSev = kneeFlex<=100 ? 'ok' : (kneeFlex<=130?'warn':'bad');
+  const m=[];
+  m.push(metric('Inclinazione tronco', trunkLean.toFixed(0)+'°', classify(trunkLean,40,55), 'rispetto alla verticale'));
+  m.push(metric('Flessione ginocchio', kneeFlex.toFixed(0)+'°', kneeSev, kneeFlex<=100?'almeno parallelo':'poco profondo'));
+  m.push(metric('Parallelismo tronco–tibia', parallelism.toFixed(0)+'°', classify(parallelism,12,22), null));
+  m.push(metric('Profondità', (depth>0?'+':'')+depth.toFixed(0)+'%', depthSev, depth>=0?'anca ≤ ginocchio':'sopra il parallelo'));
+  return {metrics:m, lm, w, h, plumbX:S.ank.x, conf:minVis([S.sh,S.hip,S.knee,S.ank])};
+}
 
 /* ---------- Disegno overlay ---------- */
 const CONN=[[11,12],[11,23],[12,24],[23,24],[11,13],[13,15],[12,14],[14,16],[23,25],[25,27],[24,26],[26,28],[27,31],[28,32],[0,11],[0,12]];
@@ -525,7 +549,7 @@ async function runAnalysis(){
       if(!res.landmarks||!res.landmarks.length){ state.results[key]={error:true}; continue; }
       const lm=res.landmarks[0], w=img.naturalWidth, h=img.naturalHeight;
       const view=VIEWS.find(v=>v.key===key);
-      const data = view.plane==='sagittale' ? computeSagittal(lm,w,h) : (view.plane==='squat' ? computeSquat(lm,w,h) : computeFrontal(lm,w,h,false));
+      const data = view.plane==='sagittale' ? computeSagittal(lm,w,h) : (view.plane==='squat' ? computeSquat(lm,w,h) : (view.plane==='squat_lat' ? computeSquatLat(lm,w,h) : computeFrontal(lm,w,h,false)));
       data.label=view.label; data.key=key;
       const tmp=document.createElement('canvas');
       data.png = drawOverlay(tmp,img,lm,data.plumbX);
@@ -544,7 +568,7 @@ async function runAnalysis(){
 /* ---------- Render risultati ---------- */
 function renderResults(){
   const out=document.getElementById('views-out'); out.innerHTML='';
-  const order=['frontale','laterale','squat'];
+  const order=['frontale','laterale','squat','squat_lat'];
   order.filter(k=>state.results[k]).forEach(k=>{
     const r=state.results[k];
     const div=document.createElement('div'); div.className='view-result';
@@ -683,7 +707,7 @@ function genPDF(){
   }
 
   // ---- VISTE ----
-  const order=['frontale','laterale','squat'];
+  const order=['frontale','laterale','squat','squat_lat'];
   order.filter(k=>state.results[k]&&!state.results[k].error).forEach((k,idx)=>{
     if(idx===0) section('Analisi posturale per vista');
     const r=state.results[k];
@@ -932,7 +956,7 @@ function collectAllData(){
     },
     fms:{ totale:fms.anyEntered?fms.total:null, su:21, completo:fms.complete, soglia_rischio:'≤14', segnalazioni:fms.flags,
       dettaglio:fms.anyEntered?fms.tests.map(t=>({test:t.name, punteggio:t.score, sx:t.l, dx:t.r})):[] },
-    postura
+    postura: posture
   };
 }
 
@@ -976,6 +1000,18 @@ function localEvaluation(d){
   if(t.sit_and_reach_cm!==null){ const b=band('sar',t.sit_and_reach_cm); if(b.sev==='bad') prio.push('mobilità della catena posteriore'); }
   if(d.postura&&d.postura.some(x=>x.esito==='Marcato')) prio.push('lavoro correttivo sulle asimmetrie posturali marcate');
   P.push('Priorità di lavoro: '+(prio.length?prio.join('; ')+'.':'mantenimento e progressione equilibrata di forza, potenza e mobilità, con monitoraggio periodico.'));
+  // consigli di allenamento concreti
+  const adv=[];
+  if(t.rsi){ const b=band('rsi',t.rsi); if(b.sev!=='ok') adv.push('forza reattiva — pliometria a basso tempo di contatto (drop jump dall\'altezza corretta, pogo, rimbalzi), 2 sedute/sett.'); }
+  if(t.cmj_cm){ const b=band('cmj',t.cmj_cm); if(b.sev!=='ok') adv.push('forza esplosiva arti inferiori — squat jump, mezzo squat pesante + salti (metodo contrasto), trap-bar jump'); }
+  if(t.leg_press_50kg_rip){ const b=band('legpress',t.leg_press_50kg_rip); if(b.sev!=='ok') adv.push('forza arti inferiori — progressione di carico su squat/leg press e affondi'); }
+  if(t.trazioni_isometriche_s){ const b=band('pullup',t.trazioni_isometriche_s); if(b.sev!=='ok') adv.push('forza di trazione e presa — rematori, lat machine, tenute/hang progressive'); }
+  if(t.plank_s){ const b=band('plank',t.plank_s); if(b.sev!=='ok') adv.push('core — progressioni anti-estensione e anti-rotazione (plank evoluti, Pallof press, dead bug)'); }
+  if(t.sit_and_reach_cm!==null){ const b=band('sar',t.sit_and_reach_cm); if(b.sev!=='ok') adv.push('mobilità catena posteriore — hip hinge, stretching dinamico ischiocrurali, nordic hamstring eccentrico'); }
+  if(f.totale!==null&&f.totale<=14) adv.push('qualità del movimento — esercizi correttivi sui pattern FMS più bassi e lavoro unilaterale per le asimmetrie, prima di aumentare i carichi');
+  if(d.postura&&d.postura.some(x=>x.esito==='Marcato')) adv.push('correttivi posturali mirati sui rilievi marcati, con rivalutazione periodica');
+  if(!adv.length) adv.push('programmazione bilanciata di forza, potenza e mobilità con mantenimento e monitoraggio periodico dei test');
+  P.push('CONSIGLI DI ALLENAMENTO: '+adv.join('; ')+'. Volumi, intensità e progressioni vanno adattati al periodo della stagione e al carico di gara.');
   P.push('Nota: sintesi generata localmente come ausilio allo screening; non sostituisce il giudizio clinico del professionista.');
   return P.join('\n\n');
 }

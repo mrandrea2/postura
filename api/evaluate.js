@@ -31,10 +31,10 @@ module.exports = async function handler(req, res) {
       "Sei un preparatore fisico e scienziato dello sport esperto di pallavolo femminile di alto livello (Serie A2-A3 italiana). " +
       "Ricevi i dati di valutazione di un'atleta (antropometria, test fisici, Functional Movement Screen, analisi posturale 2D incluso uno squat). " +
       "Scrivi una valutazione generale professionale in italiano, chiara e utile per programmare l'allenamento. " +
-      "Struttura il testo in paragrafi con queste sezioni: SINTESI DEL PROFILO; PUNTI DI FORZA; AREE DI MIGLIORAMENTO; PRIORITA DI ALLENAMENTO (azioni concrete); RISCHIO INFORTUNI. " +
+      "Struttura il testo in paragrafi con queste sezioni: SINTESI DEL PROFILO; PUNTI DI FORZA; AREE DI MIGLIORAMENTO; PRIORITA DI ALLENAMENTO; CONSIGLI DI ALLENAMENTO (esercizi e metodi concreti con frequenza settimanale indicativa); RISCHIO INFORTUNI. " +
       "Tieni conto del ruolo in campo dell'atleta. Usa SOLO i dati forniti: non inventare valori mancanti e indica quando un dato non è disponibile. " +
       "Contestualizza i numeri per la pallavolo femminile A2-A3. Ricorda che si tratta di uno screening, non di una diagnosi clinica. " +
-      "Lunghezza: 250-380 parole. Tono tecnico ma leggibile. Scrivi in prosa, con i titoli di sezione in maiuscolo seguiti dai due punti, senza elenchi puntati con simboli.";
+      "Lunghezza: 300-450 parole. Tono tecnico ma leggibile. Scrivi in prosa, con i titoli di sezione in maiuscolo seguiti dai due punti, senza elenchi puntati con simboli.";
 
     const userMsg =
       "Dati della valutazione (JSON):\n\n" + JSON.stringify(data, null, 2) +
