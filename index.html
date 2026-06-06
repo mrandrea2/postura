@@ -280,11 +280,16 @@ footer{border-top:2px solid var(--ink);margin-top:70px;padding:36px 0 56px}
     </div>
   </section>
 
-  <!-- 5. RISULTATI -->
+  <!-- 5. RISULTATI POSTURALI (compaiono dopo l'analisi foto) -->
   <section class="block" id="results">
-    <div class="sec-head"><span class="sec-num">05</span><h3>Risultati</h3></div>
+    <div class="sec-head"><span class="sec-num">05</span><h3>Analisi posturale</h3></div>
     <div id="views-out"></div>
     <div class="summary-card" id="summary"></div>
+  </section>
+
+  <!-- 6. VALUTAZIONE E REPORT (sempre disponibile, anche senza foto) -->
+  <section class="block">
+    <div class="sec-head"><span class="sec-num">06</span><h3>Valutazione e report</h3></div>
     <div class="eval-card">
       <div class="eval-head">
         <h4>Valutazione generale IA</h4>
@@ -293,7 +298,7 @@ footer{border-top:2px solid var(--ink);margin-top:70px;padding:36px 0 56px}
           Genera valutazione
         </button>
       </div>
-      <span class="status" id="eval-status">Sintesi automatica di postura, test fisici e FMS. Puoi rigenerarla e modificarla prima del PDF.</span>
+      <span class="status" id="eval-status">Sintesi automatica di postura, test fisici e FMS. Funziona anche senza foto. Puoi rigenerarla e modificarla prima del PDF.</span>
       <textarea id="ai-eval" placeholder="La valutazione generale apparirà qui. Premi «Genera valutazione» — è modificabile e finirà nel report PDF." style="margin-top:14px;min-height:180px;font-size:15px;line-height:1.6"></textarea>
     </div>
     <div class="disclaimer">
@@ -579,7 +584,10 @@ function renderSummary(){
 }
 
 /* ---------- PDF ---------- */
-document.getElementById('btn-pdf').addEventListener('click', genPDF);
+document.getElementById('btn-pdf').addEventListener('click', ()=>{
+  if(!(window.jspdf && window.jspdf.jsPDF)){ alert('Libreria PDF non caricata. Apri l\'app in una scheda del browser con connessione attiva (le librerie si scaricano da CDN).'); return; }
+  try{ genPDF(); }catch(e){ console.error(e); alert('Errore nella generazione del PDF: '+(e&&e.message||e)); }
+});
 function genPDF(){
   const { jsPDF } = window.jspdf;
   const doc=new jsPDF({unit:'mm',format:'a4'});
@@ -974,9 +982,11 @@ function localEvaluation(d){
 
 async function generateAIEval(){
   const st=document.getElementById('eval-status'); const ta=document.getElementById('ai-eval'); const btn=document.getElementById('btn-eval');
-  const data=collectAllData(); btn.disabled=true;
+  btn.disabled=true;
   st.innerHTML='<span class="spinner"></span>Generazione valutazione...'; st.className='status work';
+  let data=null;
   try{
+    data=collectAllData();
     const resp=await fetch(AI_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     if(!resp.ok) throw new Error('endpoint '+resp.status);
     const j=await resp.json();
@@ -984,8 +994,9 @@ async function generateAIEval(){
     ta.value=j.evaluation.trim();
     st.textContent='Valutazione generata con IA. Modificabile prima del PDF.'; st.className='status';
   }catch(e){
-    ta.value=localEvaluation(data);
-    st.textContent='Endpoint IA non raggiungibile: generata valutazione locale (modificabile). Per la versione IA completa, deploya api/evaluate.js su Vercel.';
+    try{ ta.value=localEvaluation(data||collectAllData()); }
+    catch(e2){ console.error(e2); ta.value='Compila i dati dell\'atleta e i test, poi premi di nuovo «Genera valutazione».'; }
+    st.textContent='Valutazione generata localmente (modificabile). Per la versione IA completa, deploya api/evaluate.js su Vercel con la chiave.';
     st.className='status';
   }finally{ btn.disabled=false; }
 }
