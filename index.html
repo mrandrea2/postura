@@ -9,6 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/2.0.4/qrcode.min.js"></script>
 <style>
 :root{
   --bg:#FFFFFF; --bg2:#F1F4F7; --surface:#FFFFFF; --surface2:#EDF1F5;
@@ -554,9 +555,10 @@ async function runAnalysis(){
       const tmp=document.createElement('canvas');
       data.png = drawOverlay(tmp,img,lm,data.plumbX);
       data.canvasW=tmp.width; data.canvasH=tmp.height;
+      data.pngStore = shrink(tmp,480);
       state.results[key]=data;
     }
-    renderResults();
+    renderResults(true);
     st.textContent='Analisi completata.'; st.className='status';
   }catch(err){
     console.error(err);
@@ -566,7 +568,7 @@ async function runAnalysis(){
 }
 
 /* ---------- Render risultati ---------- */
-function renderResults(){
+function renderResults(scroll){
   const out=document.getElementById('views-out'); out.innerHTML='';
   const order=['frontale','laterale','squat','squat_lat'];
   order.filter(k=>state.results[k]).forEach(k=>{
@@ -592,7 +594,7 @@ function renderResults(){
   });
   renderSummary();
   document.getElementById('results').style.display='block';
-  document.getElementById('results').scrollIntoView({behavior:'smooth'});
+  if(scroll) document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
 
 function collectFindings(){
@@ -787,6 +789,24 @@ function genPDF(){
   doc.setFillColor(255,242,232); doc.setDrawColor(...ORANGE); doc.setLineWidth(0.4); doc.roundedRect(M,y,CW,dH,2.5,2.5,'FD');
   doc.setTextColor(122,59,14); doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.text('NOTA METODOLOGICA',M+4,y+6);
   doc.setFont('helvetica','normal'); doc.setFontSize(8); doc.setTextColor(110,72,45); doc.text(dl,M+4,y+11);
+  y+=dH+8;
+
+  // ---- QR CODE SITO ----
+  const qrImg=makeQR(SITE_URL);
+  ensure(34);
+  const qs=26;
+  if(qrImg){
+    doc.setDrawColor(...BORDER); doc.setLineWidth(0.3); doc.roundedRect(M,y,CW,qs+8,2.5,2.5,'S');
+    doc.addImage(qrImg,'PNG',M+4,y+4,qs,qs);
+    doc.setTextColor(...INK); doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.text('Scopri di più', M+qs+12, y+11);
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...MUTED);
+    doc.text('Inquadra il QR per visitare il sito di Andrea Bertelli', M+qs+12, y+18);
+    doc.setFont('helvetica','bold'); doc.setFontSize(9.5); doc.setTextColor(...ORANGE);
+    doc.text(SITE_URL.replace(/^https?:\/\//,''), M+qs+12, y+25);
+  } else {
+    doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(...MUTED);
+    doc.text('Sito: '+SITE_URL.replace(/^https?:\/\//,''), M, y+4);
+  }
 
   // ---- FOOTER ----
   const pages=doc.getNumberOfPages();
@@ -937,6 +957,18 @@ fmsGrid.querySelectorAll('select').forEach(s=>s.addEventListener('change',()=>{r
 /* ---------- Valutazione generale IA ---------- */
 // Endpoint serverless (Vercel). Vedi file api/evaluate.js. In locale (file://) o se assente, usa il fallback.
 const AI_ENDPOINT = '/api/evaluate';
+const SITE_URL = 'https://andrea-bertelli.vercel.app'; // sito mostrato nel QR del PDF
+function makeQR(text){
+  if(typeof qrcode==='undefined') return null;
+  let qr=null;
+  for(const t of [0,4,5,6,8,10]){ try{ const q=qrcode(t,'M'); q.addData(text); q.make(); qr=q; break; }catch(e){} }
+  if(!qr) return null;
+  const n=qr.getModuleCount(), margin=2, cell=8, size=(n+margin*2)*cell;
+  const c=document.createElement('canvas'); c.width=size; c.height=size;
+  const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,size,size); ctx.fillStyle='#0E2A47';
+  for(let r=0;r<n;r++) for(let col=0;col<n;col++) if(qr.isDark(r,col)) ctx.fillRect((col+margin)*cell,(r+margin)*cell,cell,cell);
+  return c.toDataURL('image/png');
+}
 
 function collectAllData(){
   const p=physicalProfile();
@@ -1045,13 +1077,29 @@ document.getElementById('btn-eval').addEventListener('click',generateAIEval);
 //   payload = { fields:{...}, fms:{...}, posture:[...] }
 const LS_KEY='hpl_athletes_v1';
 function _read(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||'{}'); }catch(e){ return {}; } }
-function _write(o){ try{ localStorage.setItem(LS_KEY, JSON.stringify(o)); }catch(e){ alert('Spazio di salvataggio locale pieno o non disponibile.'); } }
+function _write(o){ localStorage.setItem(LS_KEY, JSON.stringify(o)); }
 const Store={
   async list(){ return Object.values(_read()).map(r=>({id:r.id,nome:r.nome,updatedAt:r.updatedAt})).sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||'')); },
   async get(id){ return _read()[id]||null; },
-  async save(rec){ const all=_read(); all[rec.id]=rec; _write(all); return rec; },
+  async save(rec){
+    const all=_read(); all[rec.id]=rec;
+    try{ _write(all); return {ok:true}; }
+    catch(e){ // spazio pieno: riprova senza le immagini
+      const light=JSON.parse(JSON.stringify(rec));
+      if(light.results) Object.values(light.results).forEach(r=>{ delete r.png; });
+      all[rec.id]=light;
+      try{ _write(all); return {ok:true, trimmed:true}; }
+      catch(e2){ delete all[rec.id]; try{ _write(all); }catch(_){} return {ok:false}; }
+    }
+  },
   async remove(id){ const all=_read(); delete all[id]; _write(all); }
 };
+function shrink(srcCanvas,maxW){
+  const s=Math.min(1,maxW/srcCanvas.width);
+  const c=document.createElement('canvas'); c.width=Math.round(srcCanvas.width*s); c.height=Math.round(srcCanvas.height*s);
+  c.getContext('2d').drawImage(srcCanvas,0,0,c.width,c.height);
+  return c.toDataURL('image/jpeg',0.72);
+}
 
 const FIELD_IDS=['f-nome','f-nascita','f-eta','f-pos','f-op','f-ruolo','f-peso','f-altezza','f-cmj','f-sar','f-dj-drop','f-dj-h','f-dj-ct','f-legpress','f-pullup','f-plank','f-note','ai-eval'];
 const ATHLETE_FIELDS=['f-nome','f-nascita','f-eta','f-pos','f-peso','f-altezza','f-cmj','f-sar','f-dj-drop','f-dj-h','f-dj-ct','f-legpress','f-pullup','f-plank','f-note','ai-eval'];
@@ -1062,15 +1110,19 @@ function fmtDate(iso){ if(!iso) return '—'; try{ return new Date(iso).toLocale
 function gatherRecord(existingId){
   const fields={}; FIELD_IDS.forEach(id=>{ const el=document.getElementById(id); if(el) fields[id]=el.value; });
   const fms={}; fmsFieldIds().forEach(id=>{ const el=document.getElementById(id); if(el) fms[id]=el.value; });
-  const posture=[]; Object.values(state.results||{}).forEach(r=>{ if(r&&!r.error) r.metrics.forEach(m=>posture.push({vista:r.label,label:m.label,val:m.val,sev:m.sev,sub:m.sub||''})); });
+  const results={};
+  Object.entries(state.results||{}).forEach(([k,r])=>{ if(r&&!r.error) results[k]={label:r.label, png:r.pngStore||r.png, canvasW:r.canvasW, canvasH:r.canvasH, conf:r.conf, error:false, metrics:r.metrics}; });
   return { id: existingId || ('atl_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6)),
            nome: (document.getElementById('f-nome').value.trim()||'Senza nome'),
-           updatedAt: new Date().toISOString(), fields, fms, posture };
+           updatedAt: new Date().toISOString(), fields, fms, results };
 }
 function applyRecord(rec){
   if(!rec) return;
   FIELD_IDS.forEach(id=>{ const el=document.getElementById(id); if(el&&rec.fields&&id in rec.fields) el.value=rec.fields[id]; });
   fmsFieldIds().forEach(id=>{ const el=document.getElementById(id); if(el) el.value=(rec.fms&&rec.fms[id])||''; });
+  state.results = rec.results || {};
+  if(Object.keys(state.results).length) renderResults();
+  else { document.getElementById('results').style.display='none'; document.getElementById('views-out').innerHTML=''; }
   updateAge(); refreshBMI(); renderFMS();
 }
 
@@ -1092,14 +1144,18 @@ document.getElementById('athlete-select').addEventListener('change', async e=>{
 });
 document.getElementById('btn-save-athlete').addEventListener('click', async ()=>{
   const rec=gatherRecord(currentAthleteId||null);
-  await Store.save(rec); currentAthleteId=rec.id;
-  await refreshRoster(rec.id); setStatus('Salvata: '+rec.nome+'  ✓');
+  const res=await Store.save(rec); currentAthleteId=rec.id;
+  await refreshRoster(rec.id);
+  if(!res.ok) setStatus('Spazio di salvataggio pieno: elimina qualche atleta o libera memoria.');
+  else if(res.trimmed) setStatus('Salvata: '+rec.nome+' (immagini omesse — spazio quasi pieno)');
+  else setStatus('Salvata: '+rec.nome+'  ✓');
 });
 document.getElementById('btn-new-athlete').addEventListener('click', ()=>{
   currentAthleteId=null; document.getElementById('athlete-select').value='';
   ATHLETE_FIELDS.forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   fmsFieldIds().forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   document.getElementById('f-data').value=new Date().toISOString().slice(0,10);
+  state.results={}; document.getElementById('views-out').innerHTML=''; document.getElementById('results').style.display='none';
   refreshBMI(); renderFMS(); setStatus('Nuova atleta — compila e premi «Salva atleta»');
 });
 document.getElementById('btn-del-athlete').addEventListener('click', async ()=>{
