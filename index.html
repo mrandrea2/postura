@@ -366,8 +366,9 @@ uploadsEl.querySelectorAll('.clearbtn').forEach(b=>{
 uploadsEl.querySelectorAll('.slot').forEach(slot=>{
   const k=slot.id.replace('slot-','');
   const input=slot.querySelector('input[type=file]');
-  // click sullo slot → apre il selettore file (tranne sul bottone elimina)
-  slot.addEventListener('click',e=>{ if(e.target.closest('.clearbtn')) return; input.click(); });
+  // click sullo slot → apre il selettore file (tranne sul bottone elimina).
+  // Guardia: ignora il click programmatico dell'input che risale (evita ricorsione).
+  slot.addEventListener('click',e=>{ if(e.target===input || e.target.closest('.clearbtn')) return; input.click(); });
   // drag & drop
   ['dragover','dragenter'].forEach(ev=>slot.addEventListener(ev,e=>{e.preventDefault();slot.style.borderColor='var(--accent)';}));
   ['dragleave','drop'].forEach(ev=>slot.addEventListener(ev,e=>{e.preventDefault();slot.style.borderColor='';}));
