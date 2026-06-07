@@ -353,7 +353,7 @@ VIEWS.forEach(v=>{
     <button class="clearbtn" data-k="${v.key}" title="Rimuovi" type="button">×</button>
     <svg class="slot-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 16l4.5-6 3.5 4.5 2.5-3L20 16"/><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/></svg>
     <span class="slot-hint">Clicca per caricare una foto<br><strong>${v.label.toLowerCase()}</strong></span>
-    <input type="file" accept="image/*" data-k="${v.key}">`;
+    <input type="file" accept="image/*,.heic,.heif" data-k="${v.key}">`;
   uploadsEl.appendChild(slot);
 });
 
@@ -375,7 +375,26 @@ uploadsEl.querySelectorAll('.slot').forEach(slot=>{
   slot.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) loadImage(k,f); });
 });
 
-function loadImage(key, file){
+function loadHeic2any(){
+  if(typeof window.heic2any!=='undefined') return Promise.resolve(window.heic2any);
+  if(window.__heicP) return window.__heicP;
+  window.__heicP=new Promise((res,rej)=>{ const sc=document.createElement('script');
+    sc.src='https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
+    sc.onload=()=>res(window.heic2any); sc.onerror=()=>rej(new Error('cdn')); document.head.appendChild(sc); });
+  return window.__heicP;
+}
+async function loadImage(key, file){
+  const st=document.getElementById('status');
+  let blob=file;
+  const isHeic=/image\/hei[cf]/i.test(file.type) || /\.hei[cf]$/i.test(file.name||'');
+  if(isHeic){
+    st.innerHTML='<span class="spinner"></span>Conversione HEIC in corso (qualche secondo)...'; st.className='status work';
+    try{
+      const conv=await loadHeic2any();
+      const out=await conv({blob:file, toType:'image/jpeg', quality:0.9});
+      blob=Array.isArray(out)?out[0]:out;
+    }catch(e){ console.error('HEIC',e); st.textContent='Conversione HEIC non riuscita. Imposta la fotocamera su «Più compatibile» (JPEG) o converti la foto.'; st.className='status err'; return; }
+  }
   const img = new Image();
   img.onload = ()=>{
     state.images[key] = img;
@@ -386,7 +405,8 @@ function loadImage(key, file){
     prev.src = img.src;
     updateStatus();
   };
-  img.src = URL.createObjectURL(file);
+  img.onerror = ()=>{ st.textContent='Impossibile leggere l\'immagine. Usa JPG o PNG.'; st.className='status err'; };
+  img.src = URL.createObjectURL(blob);
 }
 function clearSlot(key){
   delete state.images[key]; delete state.results[key];
