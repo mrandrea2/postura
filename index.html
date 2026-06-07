@@ -9,7 +9,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/2.0.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <style>
 :root{
   --bg:#FFFFFF; --bg2:#F1F4F7; --surface:#FFFFFF; --surface2:#EDF1F5;
@@ -346,28 +346,32 @@ let landmarker = null;
 /* ---------- Costruzione slot upload ---------- */
 const uploadsEl = document.getElementById('uploads');
 VIEWS.forEach(v=>{
-  const slot = document.createElement('label');
+  const slot = document.createElement('div');
   slot.className='slot'; slot.id='slot-'+v.key;
   slot.innerHTML = `
     <span class="slot-label">${v.label}</span>
-    <button class="clearbtn" data-k="${v.key}" title="Rimuovi">×</button>
+    <button class="clearbtn" data-k="${v.key}" title="Rimuovi" type="button">×</button>
     <svg class="slot-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 16l4.5-6 3.5 4.5 2.5-3L20 16"/><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/></svg>
-    <span class="slot-hint">Tocca o trascina una foto<br><strong>${v.label.toLowerCase()}</strong></span>
+    <span class="slot-hint">Clicca per caricare una foto<br><strong>${v.label.toLowerCase()}</strong></span>
     <input type="file" accept="image/*" data-k="${v.key}">`;
   uploadsEl.appendChild(slot);
 });
 
 uploadsEl.querySelectorAll('input[type=file]').forEach(inp=>{
-  inp.addEventListener('change',e=>{ if(e.target.files[0]) loadImage(e.target.dataset.k, e.target.files[0]); });
+  inp.addEventListener('change',e=>{ if(e.target.files[0]) loadImage(e.target.dataset.k, e.target.files[0]); e.target.value=''; });
 });
 uploadsEl.querySelectorAll('.clearbtn').forEach(b=>{
   b.addEventListener('click',e=>{ e.preventDefault(); e.stopPropagation(); clearSlot(e.target.dataset.k); });
 });
-// drag&drop
 uploadsEl.querySelectorAll('.slot').forEach(slot=>{
+  const k=slot.id.replace('slot-','');
+  const input=slot.querySelector('input[type=file]');
+  // click sullo slot → apre il selettore file (tranne sul bottone elimina)
+  slot.addEventListener('click',e=>{ if(e.target.closest('.clearbtn')) return; input.click(); });
+  // drag & drop
   ['dragover','dragenter'].forEach(ev=>slot.addEventListener(ev,e=>{e.preventDefault();slot.style.borderColor='var(--accent)';}));
   ['dragleave','drop'].forEach(ev=>slot.addEventListener(ev,e=>{e.preventDefault();slot.style.borderColor='';}));
-  slot.addEventListener('drop',e=>{ const k=slot.id.replace('slot-',''); const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) loadImage(k,f); });
+  slot.addEventListener('drop',e=>{ const f=e.dataTransfer.files[0]; if(f&&f.type.startsWith('image/')) loadImage(k,f); });
 });
 
 function loadImage(key, file){
@@ -959,15 +963,16 @@ fmsGrid.querySelectorAll('select').forEach(s=>s.addEventListener('change',()=>{r
 const AI_ENDPOINT = '/api/evaluate';
 const SITE_URL = 'https://andrea-bertelli.vercel.app'; // sito mostrato nel QR del PDF
 function makeQR(text){
-  if(typeof qrcode==='undefined') return null;
-  let qr=null;
-  for(const t of [0,4,5,6,8,10]){ try{ const q=qrcode(t,'M'); q.addData(text); q.make(); qr=q; break; }catch(e){} }
-  if(!qr) return null;
-  const n=qr.getModuleCount(), margin=2, cell=8, size=(n+margin*2)*cell;
-  const c=document.createElement('canvas'); c.width=size; c.height=size;
-  const ctx=c.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,size,size); ctx.fillStyle='#0E2A47';
-  for(let r=0;r<n;r++) for(let col=0;col<n;col++) if(qr.isDark(r,col)) ctx.fillRect((col+margin)*cell,(r+margin)*cell,cell,cell);
-  return c.toDataURL('image/png');
+  if(typeof QRCode==='undefined') return null;
+  try{
+    const holder=document.createElement('div');
+    new QRCode(holder,{text:text,width:240,height:240,colorDark:'#0E2A47',colorLight:'#ffffff',correctLevel:QRCode.CorrectLevel.M});
+    const cv=holder.querySelector('canvas');
+    if(cv) return cv.toDataURL('image/png');
+    const img=holder.querySelector('img');
+    if(img&&img.src&&img.src.indexOf('data:')===0) return img.src;
+    return null;
+  }catch(e){ console.error('QR',e); return null; }
 }
 
 function collectAllData(){
