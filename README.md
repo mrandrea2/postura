@@ -1,4 +1,4 @@
-# Human Performance Lab — Postural Screening Suite
+# Arena Volley Team Verona — Valutazione fisico-posturale
 
 App per analisi posturale (foto frontale, laterale, squat) con pose estimation, test fisici con
 semaforo, FMS e generazione report PDF. Valutazione generale prodotta da Claude tramite una
