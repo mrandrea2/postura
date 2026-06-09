@@ -792,14 +792,29 @@ function genPDF(){
   if(!evalTxt) evalTxt=localEvaluation(collectAllData());
   if(evalTxt){
     section('Valutazione generale');
-    const paras=pdfSafe(evalTxt).split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
-    doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...INK);
+    let txt=pdfSafe(evalTxt)
+      .replace(/^\s*#{1,6}\s*/gm,'')          // titoli markdown #
+      .replace(/\*\*(.*?)\*\*/g,'$1')          // grassetto **
+      .replace(/\*(.*?)\*/g,'$1')              // corsivo *
+      .replace(/^\s*[-*_=]{3,}\s*$/gm,'');     // separatori ---
+    const paras=txt.split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
+    const HEAD=/^([A-ZÀ-Ý][A-ZÀ-Ý0-9'\s\/\-]{2,46}):\s*/;
     paras.forEach(p=>{
-      const lines=doc.splitTextToSize(p, CW);
-      lines.forEach(ln=>{ ensure(7); doc.text(ln, M, y); y+=4.9; });
-      y+=3.5;
+      let head=null, body=p; const m=p.match(HEAD);
+      if(m){ head=m[1].trim(); body=p.slice(m[0].length).trim(); }
+      if(head){
+        ensure(12); y+=2;
+        doc.setFillColor(...ORANGE); doc.rect(M,y-3.4,2.6,5,'F');
+        doc.setFont('helvetica','bold'); doc.setFontSize(10.5); doc.setTextColor(...NAVY);
+        doc.text(head, M+5.5, y+0.9); y+=6;
+      }
+      if(body){
+        doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...INK);
+        doc.splitTextToSize(body, CW).forEach(ln=>{ ensure(7); doc.text(ln, M, y); y+=4.9; });
+      }
+      y+=3;
     });
-    y-=1.5;
+    y-=1;
   }
 
   // ---- DISCLAIMER ----
@@ -848,7 +863,12 @@ function pdfSafe(t){
     .replace(/[\u2013\u2014\u2212]/g,'-')
     .replace(/\u2026/g,'...')
     .replace(/[\u00A0\u202F\u2009]/g,' ')
-    .replace(/[\u2022]/g,'-');
+    .replace(/\u2022/g,'-')
+    .replace(/\u2264/g,'<=').replace(/\u2265/g,'>=')
+    .replace(/\u00D7/g,'x').replace(/\u00F7/g,'/')
+    .replace(/[\u2192\u2794\u279C\u27A1]/g,'->')
+    .replace(/[\u2190]/g,'<-')
+    .replace(/[^\x09\x0A\x0D\x20-\x7E\u00A0-\u00FF\u20AC]/g,''); // rimuove caratteri non resi dal font
 }
 
 /* ---------- Reset ---------- */
@@ -1031,13 +1051,13 @@ function localEvaluation(d){
   const expl=[];
   if(t.cmj_cm){ const b=band('cmj',t.cmj_cm); expl.push(`CMJ ${t.cmj_cm} cm (${b.lab.toLowerCase()})`); }
   if(t.rsi){ const b=band('rsi',t.rsi); expl.push(`RSI ${t.rsi} (${b.lab.toLowerCase()})${t.rsi_dettaglio?' — '+t.rsi_dettaglio:''}`); }
-  if(expl.length) P.push(`Forza esplosiva ed elastica: ${expl.join(', ')}. CMJ e RSI insieme descrivono potenza concentrica e capacità reattiva (stiffness): se l'RSI è basso rispetto al CMJ, l'enfasi va su pliometria a basso tempo di contatto; se entrambi sono alti, la base esplosiva è solida per attacco e muro.`);
+  if(expl.length) P.push(`FORZA ESPLOSIVA ED ELASTICA: ${expl.join(', ')}. CMJ e RSI insieme descrivono potenza concentrica e capacità reattiva (stiffness): se l'RSI è basso rispetto al CMJ, l'enfasi va su pliometria a basso tempo di contatto; se entrambi sono alti, la base esplosiva è solida per attacco e muro.`);
   // forza arti inf + core
   const str=[];
   if(t.leg_press_50kg_rip) str.push(`leg press 50 kg ${t.leg_press_50kg_rip} ripetizioni (resistenza alla forza arti inferiori)`);
   if(t.trazioni_isometriche_s) str.push(`tenuta isometrica alla sbarra ${t.trazioni_isometriche_s} s (forza isometrica dorsali e presa)`);
   if(t.plank_s) str.push(`plank ${t.plank_s} s (resistenza del core)`);
-  if(str.length) P.push(`Forza e resistenza: ${str.join('; ')}. Core e catena dorsale sono determinanti per la stabilità del tronco nel salto e nel gesto di attacco e per la prevenzione di sovraccarichi lombari e di spalla.`);
+  if(str.length) P.push(`FORZA E RESISTENZA: ${str.join('; ')}. Core e catena dorsale sono determinanti per la stabilità del tronco nel salto e nel gesto di attacco e per la prevenzione di sovraccarichi lombari e di spalla.`);
   // flessibilità + BMI
   const misc=[];
   if(t.sit_and_reach_cm!==null){ const b=band('sar',t.sit_and_reach_cm); misc.push(`Sit & Reach ${t.sit_and_reach_cm} cm (${b.lab.toLowerCase()}): flessibilità della catena posteriore`); }
@@ -1053,8 +1073,8 @@ function localEvaluation(d){
   // postura
   if(d.postura&&d.postura.length){
     const dev=d.postura.filter(x=>x.esito&&x.esito!=='Ottimale');
-    if(dev.length) P.push('Postura: rilievi principali — '+dev.map(x=>`${x.vista.toLowerCase()}, ${x.parametro.toLowerCase()} ${x.valore}`).join('; ')+'. Da rivalutare nel tempo per distinguere atteggiamenti posturali modificabili da adattamenti strutturali.');
-    else P.push('Postura: nessuna deviazione significativa ai parametri fotografici analizzati.');
+    if(dev.length) P.push('POSTURA: rilievi principali — '+dev.map(x=>`${x.vista.toLowerCase()}, ${x.parametro.toLowerCase()} ${x.valore}`).join('; ')+'. Da rivalutare nel tempo per distinguere atteggiamenti posturali modificabili da adattamenti strutturali.');
+    else P.push('POSTURA: nessuna deviazione significativa ai parametri fotografici analizzati.');
   }
   // priorità
   const prio=[];
@@ -1063,7 +1083,7 @@ function localEvaluation(d){
   if(t.cmj_cm){ const b=band('cmj',t.cmj_cm); if(b.sev==='bad') prio.push('incremento della forza esplosiva degli arti inferiori'); }
   if(t.sit_and_reach_cm!==null){ const b=band('sar',t.sit_and_reach_cm); if(b.sev==='bad') prio.push('mobilità della catena posteriore'); }
   if(d.postura&&d.postura.some(x=>x.esito==='Marcato')) prio.push('lavoro correttivo sulle asimmetrie posturali marcate');
-  P.push('Priorità di lavoro: '+(prio.length?prio.join('; ')+'.':'mantenimento e progressione equilibrata di forza, potenza e mobilità, con monitoraggio periodico.'));
+  P.push('PRIORITÀ DI LAVORO: '+(prio.length?prio.join('; ')+'.':'mantenimento e progressione equilibrata di forza, potenza e mobilità, con monitoraggio periodico.'));
   // consigli di allenamento concreti
   const adv=[];
   if(t.rsi){ const b=band('rsi',t.rsi); if(b.sev!=='ok') adv.push('forza reattiva — pliometria a basso tempo di contatto (drop jump dall\'altezza corretta, pogo, rimbalzi), 2 sedute/sett.'); }
@@ -1076,7 +1096,7 @@ function localEvaluation(d){
   if(d.postura&&d.postura.some(x=>x.esito==='Marcato')) adv.push('correttivi posturali mirati sui rilievi marcati, con rivalutazione periodica');
   if(!adv.length) adv.push('programmazione bilanciata di forza, potenza e mobilità con mantenimento e monitoraggio periodico dei test');
   P.push('CONSIGLI DI ALLENAMENTO: '+adv.join('; ')+'. Volumi, intensità e progressioni vanno adattati al periodo della stagione e al carico di gara.');
-  P.push('Nota: sintesi generata localmente come ausilio allo screening; non sostituisce il giudizio clinico del professionista.');
+  P.push('NOTA: sintesi generata localmente come ausilio allo screening; non sostituisce il giudizio clinico del professionista.');
   return P.join('\n\n');
 }
 

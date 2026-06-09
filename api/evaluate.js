@@ -29,16 +29,19 @@ module.exports = async function handler(req, res) {
 
     const system =
       "Sei un preparatore fisico e scienziato dello sport esperto di pallavolo femminile di alto livello (Serie A2-A3 italiana). " +
-      "Ricevi i dati di valutazione di un'atleta (antropometria, test fisici, Functional Movement Screen, analisi posturale 2D incluso uno squat). " +
-      "Scrivi una valutazione generale professionale in italiano, chiara e utile per programmare l'allenamento. " +
-      "Struttura il testo in paragrafi con queste sezioni: SINTESI DEL PROFILO; PUNTI DI FORZA; AREE DI MIGLIORAMENTO; PRIORITA DI ALLENAMENTO; CONSIGLI DI ALLENAMENTO (esercizi e metodi concreti con frequenza settimanale indicativa); RISCHIO INFORTUNI. " +
-      "Tieni conto del ruolo in campo dell'atleta. Usa SOLO i dati forniti: non inventare valori mancanti e indica quando un dato non è disponibile. " +
-      "Contestualizza i numeri per la pallavolo femminile A2-A3. Ricorda che si tratta di uno screening, non di una diagnosi clinica. " +
-      "Lunghezza: 300-450 parole. Tono tecnico ma leggibile. Scrivi in prosa, con i titoli di sezione in maiuscolo seguiti dai due punti, senza elenchi puntati con simboli.";
+      "Ricevi i dati di valutazione di un'atleta (antropometria, test fisici, Functional Movement Screen, analisi posturale 2D incluso lo squat frontale e laterale). " +
+      "Scrivi una valutazione generale professionale in italiano, chiara e operativa per programmare l'allenamento. " +
+      "Usa ESATTAMENTE queste sei sezioni, ognuna come paragrafo che inizia con l'etichetta in MAIUSCOLO seguita dai due punti: " +
+      "SINTESI DEL PROFILO: ; PUNTI DI FORZA: ; AREE DI MIGLIORAMENTO: ; PRIORITA DI ALLENAMENTO: ; CONSIGLI DI ALLENAMENTO: ; RISCHIO INFORTUNI: . " +
+      "In CONSIGLI DI ALLENAMENTO dai indicazioni CONCRETE e periodizzate: tipologie di esercizi, frequenza settimanale e, dove utile, schemi indicativi di serie x ripetizioni o durate, collegandole alle criticità emerse e al ruolo in campo. " +
+      "Collega esplicitamente i rilievi di postura e di squat (valgismo, profondità, mobilità) alla performance pallavolistica e al rischio infortuni (es. legamento crociato, spalla). " +
+      "Tieni conto del ruolo in campo. Usa SOLO i dati forniti: non inventare valori mancanti e segnala se un dato manca. Contestualizza i numeri per la pallavolo femminile A2-A3. " +
+      "IMPORTANTE sul formato: scrivi in prosa, NON usare markdown (niente #, *, **, trattini come elenco, né righe di separazione ---), NON aggiungere un titolo né una riga con nome/ruolo/categoria all'inizio: parti direttamente da 'SINTESI DEL PROFILO:'. " +
+      "Ricorda che è uno screening, non una diagnosi clinica. Lunghezza: 350-500 parole. Tono tecnico ma leggibile.";
 
     const userMsg =
       "Dati della valutazione (JSON):\n\n" + JSON.stringify(data, null, 2) +
-      "\n\nProduci la valutazione generale seguendo la struttura indicata.";
+      "\n\nProduci la valutazione generale seguendo ESATTAMENTE le sei sezioni indicate, senza titolo iniziale e senza markdown.";
 
     const r = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
