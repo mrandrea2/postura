@@ -676,7 +676,7 @@ function genPDF(){
     columnStyles:{0:{fontStyle:'bold',textColor:MUTED,cellWidth:30},2:{fontStyle:'bold',textColor:MUTED,cellWidth:30}},
     body:[['Nome',nome,'Età',String(eta)],['Ruolo pallavolo',pos,'Data',data],['Operatore',{content:op+' — '+ruolo,colSpan:3}]] });
   y=doc.lastAutoTable.finalY+4;
-  if(note){ ensure(14); const nl=doc.splitTextToSize(note, CW-8);
+  if(note){ ensure(14); const nl=doc.splitTextToSize(pdfSafe(note), CW-8);
     doc.setFillColor(246,249,251); doc.setDrawColor(...BORDER); doc.setLineWidth(0.3);
     doc.roundedRect(M,y,CW,nl.length*4.4+8,2,2,'FD');
     doc.setFont('helvetica','bold'); doc.setFontSize(8.5); doc.setTextColor(...MUTED); doc.text('NOTE / ANAMNESI',M+4,y+5.5);
@@ -792,15 +792,14 @@ function genPDF(){
   if(!evalTxt) evalTxt=localEvaluation(collectAllData());
   if(evalTxt){
     section('Valutazione generale');
-    const paras=evalTxt.split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
+    const paras=pdfSafe(evalTxt).split(/\n{2,}/).map(s=>s.trim()).filter(Boolean);
     doc.setFont('helvetica','normal'); doc.setFontSize(9.5); doc.setTextColor(...INK);
     paras.forEach(p=>{
       const lines=doc.splitTextToSize(p, CW);
-      ensure(lines.length*4.8+5);
-      doc.text(lines, M, y, {align:'justify', maxWidth:CW});
-      y+=lines.length*4.8+4;
+      lines.forEach(ln=>{ ensure(7); doc.text(ln, M, y); y+=4.9; });
+      y+=3.5;
     });
-    y+=2;
+    y-=1.5;
   }
 
   // ---- DISCLAIMER ----
@@ -842,6 +841,15 @@ function genPDF(){
   doc.save(`report_${(nome||'soggetto').replace(/\s+/g,'_').toLowerCase()}_${data}.pdf`);
 }
 function val(id){ return document.getElementById(id).value.trim(); }
+function pdfSafe(t){
+  return (t||'')
+    .replace(/[\u2018\u2019\u201A\u2032\u00B4]/g,"'")
+    .replace(/[\u201C\u201D\u201E\u2033]/g,'"')
+    .replace(/[\u2013\u2014\u2212]/g,'-')
+    .replace(/\u2026/g,'...')
+    .replace(/[\u00A0\u202F\u2009]/g,' ')
+    .replace(/[\u2022]/g,'-');
+}
 
 /* ---------- Reset ---------- */
 document.getElementById('btn-reset').addEventListener('click',()=>{
